@@ -22,31 +22,30 @@ def safe_dataframe(results):
         return pd.DataFrame([results])
     return pd.DataFrame(results)
 
-def clean_results(df, value_col, threshold=1.0):
-    df = df[df[value_col] > threshold]
-    df = df.sort_values(by=value_col, ascending=False)
-    return df
-
-def plot_pie_chart(df, label_col, value_col, title):
-    fig = px.pie(
+def plot_bar_chart(df, label_col, value_col, title):
+    fig = px.bar(
         df,
-        names=label_col,
-        values=value_col,
+        x=value_col,
+        y=label_col,
+        orientation='h',
         title=title,
-        hole=0.5
+        text=value_col
     )
-
-    fig.update_traces(
-        textinfo='percent+label',
-        pull=[0.05]*len(df)
-    )
-
-    fig.update_layout(
-        title_x=0.5,
-        legend_title="Categories"
-    )
-
+    fig.update_layout(title_x=0.5)
     st.plotly_chart(fig, use_container_width=True)
+
+def show_top_prediction(df, label_col, value_col):
+    top = df.iloc[0]
+    st.success(f"🏆 **Top Prediction: {top[label_col]} ({top[value_col]}%)**")
+
+def confidence_explanation():
+    with st.expander("📘 How to interpret confidence scores?"):
+        st.markdown("""
+        - Confidence scores represent the model's probability for each class.
+        - Higher percentage = higher certainty.
+        - Scores may not always sum to exactly 100% due to rounding.
+        - In multi-class classification, compare relative differences.
+        """)
 
 # ================== LOAD MODELS ==================
 
@@ -124,12 +123,14 @@ if st.button("🔎 Analyze") and text.strip():
 
             df['score'] = (df['score'] * 100).round(2)
             df = df.rename(columns={'label': 'Sentiment', 'score': 'Confidence (%)'})
-
-            df = clean_results(df, 'Confidence (%)')
+            df = df.sort_values(by='Confidence (%)', ascending=False)
 
             st.subheader("📊 Sentiment Results")
+            show_top_prediction(df, 'Sentiment', 'Confidence (%)')
             st.dataframe(df, use_container_width=True)
-            plot_pie_chart(df, 'Sentiment', 'Confidence (%)', "Sentiment Distribution")
+            plot_bar_chart(df, 'Sentiment', 'Confidence (%)', "Sentiment Confidence")
+
+            confidence_explanation()
 
         # ================== TOXICITY ==================
         elif task == "Toxic Comment Detection":
@@ -139,12 +140,15 @@ if st.button("🔎 Analyze") and text.strip():
             df['score'] = (df['score'] * 100).round(2)
             df = df.rename(columns={'label': 'Toxic Label', 'score': 'Confidence (%)'})
 
-            # 🔥 Keep top 3 labels only (important)
+            # Top 3 for clarity
             df = df.sort_values(by='Confidence (%)', ascending=False).head(3)
 
             st.subheader("☣️ Toxicity Results")
+            show_top_prediction(df, 'Toxic Label', 'Confidence (%)')
             st.dataframe(df, use_container_width=True)
-            plot_pie_chart(df, 'Toxic Label', 'Confidence (%)', "Top Toxicity Signals")
+            plot_bar_chart(df, 'Toxic Label', 'Confidence (%)', "Top Toxicity Signals")
+
+            confidence_explanation()
 
         # ================== NEWS ==================
         elif task == "News Category Classification":
@@ -159,12 +163,14 @@ if st.button("🔎 Analyze") and text.strip():
 
             df = pd.DataFrame(results)
             df = df.rename(columns={'label': 'Category', 'score': 'Confidence (%)'})
-
             df = df.sort_values(by='Confidence (%)', ascending=False)
 
             st.subheader("📰 News Category Results")
+            show_top_prediction(df, 'Category', 'Confidence (%)')
             st.dataframe(df, use_container_width=True)
-            plot_pie_chart(df, 'Category', 'Confidence (%)', "Category Distribution")
+            plot_bar_chart(df, 'Category', 'Confidence (%)', "Category Confidence Distribution")
+
+            confidence_explanation()
 
 else:
     st.info("👉 Enter text and click **Analyze** to see results.")
