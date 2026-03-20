@@ -8,7 +8,6 @@ from langdetect import detect
 # ================== CONFIG ==================
 st.set_page_config(page_title="MultiText AI", layout="wide")
 
-# Label mapping for AG News categories
 NEWS_LABEL_MAP = {
     "LABEL_0": "World",
     "LABEL_1": "Sports",
@@ -18,19 +17,39 @@ NEWS_LABEL_MAP = {
 
 # ================== HELPERS ==================
 
-# Safe DataFrame creator (fixes your error)
 def safe_dataframe(results):
     if isinstance(results, dict):
         return pd.DataFrame([results])
     return pd.DataFrame(results)
 
-# Pie chart
+def clean_results(df, value_col, threshold=1.0):
+    df = df[df[value_col] > threshold]
+    df = df.sort_values(by=value_col, ascending=False)
+    return df
+
 def plot_pie_chart(df, label_col, value_col, title):
-    fig = px.pie(df, names=label_col, values=value_col, title=title, hole=0.4)
-    fig.update_traces(textinfo='percent+label', pull=[0.02]*len(df))
+    fig = px.pie(
+        df,
+        names=label_col,
+        values=value_col,
+        title=title,
+        hole=0.5
+    )
+
+    fig.update_traces(
+        textinfo='percent+label',
+        pull=[0.05]*len(df)
+    )
+
+    fig.update_layout(
+        title_x=0.5,
+        legend_title="Categories"
+    )
+
     st.plotly_chart(fig, use_container_width=True)
 
-# Load models (cached)
+# ================== LOAD MODELS ==================
+
 @st.cache_resource
 def load_pipelines():
     sentiment_pipe = pipeline(
@@ -50,11 +69,11 @@ def load_pipelines():
     )
     return sentiment_pipe, toxic_pipe, category_pipe
 
-# ================== LOAD MODELS ==================
 with st.spinner("🔄 Loading models..."):
     sentiment_pipe, toxic_pipe, category_pipe = load_pipelines()
 
 # ================== UI ==================
+
 st.markdown(
     "<h1 style='text-align: center;'>🤖 MultiText AI - Smart Text Classification</h1>",
     unsafe_allow_html=True
@@ -71,10 +90,11 @@ task = st.selectbox(
 
 text = st.text_area("✍️ Enter your text here (any language):", height=150)
 
-# ================== MAIN LOGIC ==================
+# ================== MAIN ==================
+
 if st.button("🔎 Analyze") and text.strip():
 
-    # -------- Language Detection & Translation --------
+    # 🌐 Language Detection
     with st.spinner("🌐 Detecting language & translating..."):
         try:
             detected_lang = detect(text)
@@ -94,10 +114,10 @@ if st.button("🔎 Analyze") and text.strip():
             text_to_use = text
             st.success("✅ Input is already in English")
 
-    # -------- Classification --------
+    # ⚙️ Model Execution
     with st.spinner("⚙️ Running model..."):
 
-        # ===== SENTIMENT =====
+        # ================== SENTIMENT ==================
         if task == "Sentiment Analysis":
             results = sentiment_pipe(text_to_use)[0]
             df = safe_dataframe(results)
@@ -105,11 +125,13 @@ if st.button("🔎 Analyze") and text.strip():
             df['score'] = (df['score'] * 100).round(2)
             df = df.rename(columns={'label': 'Sentiment', 'score': 'Confidence (%)'})
 
+            df = clean_results(df, 'Confidence (%)')
+
             st.subheader("📊 Sentiment Results")
             st.dataframe(df, use_container_width=True)
             plot_pie_chart(df, 'Sentiment', 'Confidence (%)', "Sentiment Distribution")
 
-        # ===== TOXICITY =====
+        # ================== TOXICITY ==================
         elif task == "Toxic Comment Detection":
             results = toxic_pipe(text_to_use)[0]
             df = safe_dataframe(results)
@@ -117,15 +139,17 @@ if st.button("🔎 Analyze") and text.strip():
             df['score'] = (df['score'] * 100).round(2)
             df = df.rename(columns={'label': 'Toxic Label', 'score': 'Confidence (%)'})
 
+            # 🔥 Keep top 3 labels only (important)
+            df = df.sort_values(by='Confidence (%)', ascending=False).head(3)
+
             st.subheader("☣️ Toxicity Results")
             st.dataframe(df, use_container_width=True)
-            plot_pie_chart(df, 'Toxic Label', 'Confidence (%)', "Toxicity Breakdown")
+            plot_pie_chart(df, 'Toxic Label', 'Confidence (%)', "Top Toxicity Signals")
 
-        # ===== NEWS CATEGORY =====
+        # ================== NEWS ==================
         elif task == "News Category Classification":
             results = category_pipe(text_to_use)[0]
 
-            # Ensure list format
             if isinstance(results, dict):
                 results = [results]
 
@@ -135,6 +159,8 @@ if st.button("🔎 Analyze") and text.strip():
 
             df = pd.DataFrame(results)
             df = df.rename(columns={'label': 'Category', 'score': 'Confidence (%)'})
+
+            df = df.sort_values(by='Confidence (%)', ascending=False)
 
             st.subheader("📰 News Category Results")
             st.dataframe(df, use_container_width=True)
