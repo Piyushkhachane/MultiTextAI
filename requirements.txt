@@ -1,7 +1,8 @@
-streamlit
-transformers
-torch
-pandas
-plotly
-langdetect
-deep-translator
+streamlit==1.33.0
+transformers==4.38.2
+torch==2.1.2
+pandas==2.1.4
+plotly==5.20.0
+deep-translator==1.11.4
+langdetect==1.0.9
+sentencepiece==0.1.99
